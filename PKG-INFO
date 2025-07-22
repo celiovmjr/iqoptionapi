@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: iqoptionapi
+Version: 0.0.2
+Summary: Best IQ Option API for python creditos: Célio Junior
+Home-page: https://github.com/celiovmjr/iqoptionapi
+Author: Célio Junior
+Requires-Dist: pylint
+Requires-Dist: requests
+Requires-Dist: websocket-client==0.56
+
+Best IQ Option API for python creditos: Célio Junior
