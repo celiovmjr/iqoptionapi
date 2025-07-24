@@ -165,7 +165,7 @@ class IQOptionAPI(object):  # pylint: disable=too-many-instance-attributes
         self.wss_url = "wss://{host}/echo/websocket".format(host=host)
         self.websocket_client = None
         self.session = requests.Session()
-        self.session.verify = False
+        self.session.verify = True
         self.session.trust_env = False
         self.username = username
         self.password = password

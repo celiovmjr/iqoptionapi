@@ -1,11 +1,15 @@
-"""Module for IQ option websocket."""
+"""Module for IQ Option WebSocket client."""
 
 import json
 import logging
+import ssl
+from threading import Thread
+
 import websocket
+import certifi
+
 import iqoptionapi.constants as OP_code
 import iqoptionapi.global_value as global_value
-from threading import Thread
 from iqoptionapi.ws.received.technical_indicators import technical_indicators
 from iqoptionapi.ws.received.time_sync import time_sync
 from iqoptionapi.ws.received.heartbeat import heartbeat
@@ -62,129 +66,129 @@ from iqoptionapi.ws.received.client_price_generated import client_price_generate
 from iqoptionapi.ws.received.users_availability import users_availability
 
 
-class WebsocketClient(object):
-    """Class for work with IQ option websocket."""
+class WebsocketClient:
+    """Handles IQ Option WebSocket communication."""
 
     def __init__(self, api):
-        """
-        :param api: The instance of :class:`IQOptionAPI
-            <iqoptionapi.api.IQOptionAPI>`.
-        """
+        """Initialize the WebSocket client."""
         self.api = api
         self.wss = websocket.WebSocketApp(
-            self.api.wss_url, on_message=self.on_message,
-            on_error=self.on_error, on_close=self.on_close,
-            on_open=self.on_open)
+            self.api.wss_url,
+            on_message=self.on_message,
+            on_error=self.on_error,
+            on_close=self.on_close,
+            on_open=self.on_open
+        )
 
-    def dict_queue_add(self, dict, maxdict, key1, key2, key3, value):
-        if key3 in dict[key1][key2]:
-            dict[key1][key2][key3] = value
+    def dict_queue_add(self, store, max_size, key1, key2, key3, value):
+        """Add value to nested dictionary with size limit."""
+        subdict = store.setdefault(key1, {}).setdefault(key2, {})
+        if key3 in subdict:
+            subdict[key3] = value
+        elif len(subdict) < max_size:
+            subdict[key3] = value
         else:
-            while True:
-                try:
-                    dic_size = len(dict[key1][key2])
-                except:
-                    dic_size = 0
-                if dic_size < maxdict:
-                    dict[key1][key2][key3] = value
-                    break
-                else:
-                    # del mini key
-                    del dict[key1][key2][sorted(
-                        dict[key1][key2].keys(), reverse=False)[0]]
+            oldest_key = sorted(subdict.keys())[0]
+            del subdict[oldest_key]
+            subdict[key3] = value
 
     def api_dict_clean(self, obj):
+        """Clear dictionary if it exceeds size limit."""
         if len(obj) > 5000:
-            for k in obj.keys():
-                del obj[k]
-                break
+            obj.pop(next(iter(obj)))
 
-    def on_message(self, message):  # pylint: disable=unused-argument
-        """Method to process websocket messages."""
+    def on_message(self, ws, message):
+        """Handle incoming WebSocket messages."""
         global_value.ssl_Mutual_exclusion = True
-        logger = logging.getLogger(__name__)
-        logger.debug(message)
+        logging.getLogger(__name__).debug(message)
+        try:
+            data = json.loads(message)
+        except json.JSONDecodeError:
+            return
 
-        message = json.loads(str(message))
-
-
-        technical_indicators(self.api, message, self.api_dict_clean)
-        time_sync(self.api, message)
-        heartbeat(self.api, message)
-        balances(self.api, message)
-        profile(self.api, message)
-        balance_changed(self.api, message)
-        candles(self.api, message)
-        buy_complete(self.api, message)
-        option(self.api, message)
-        position_history(self.api, message)
-        list_info_data(self.api, message)
-        candle_generated_realtime(self.api, message, self.dict_queue_add)
-        candle_generated_v2(self.api, message, self.dict_queue_add)
-        commission_changed(self.api, message)
-        socket_option_opened(self.api, message)
-        api_option_init_all_result(self.api, message)
-        initialization_data(self.api, message)
-        underlying_list(self.api, message)
-        instruments(self.api, message)
-        financial_information(self.api, message)
-        position_changed(self.api, message)
-        option_opened(self.api, message)
-        option_closed(self.api, message)
-        top_assets_updated(self.api, message)
-        strike_list(self.api, message)
-        api_game_betinfo_result(self.api, message)
-        traders_mood_changed(self.api, message)
-         # ------for forex&cfd&crypto..
-        order_placed_temp(self.api, message)
-        order(self.api, message)
-        position(self.api, message)
-        positions(self.api, message)
-        order_placed_temp(self.api, message)
-        deferred_orders(self.api, message)
-        history_positions(self.api, message)
-        available_leverages(self.api, message)
-        order_canceled(self.api, message)
-        position_closed(self.api, message)
-        overnight_fee(self.api, message)
-        api_game_getoptions_result(self.api, message)
-        sold_options(self.api, message)
-        tpsl_changed(self.api, message)
-        auto_margin_call_changed(self.api, message)
-        digital_option_placed(self.api, message, self.api_dict_clean)
-        result(self.api, message)
-        instrument_quotes_generated(self.api, message)
-        training_balance_reset(self.api, message)
-        socket_option_closed(self.api, message)
-        live_deal_binary_option_placed(self.api, message)
-        live_deal_digital_option(self.api, message)
-        leaderboard_deals_client(self.api, message)
-        live_deal(self.api, message)
-        user_profile_client(self.api, message)
-        leaderboard_userinfo_deals_client(self.api, message)
-        users_availability(self.api, message)
-        client_price_generated(self.api, message)
+        technical_indicators(self.api, data, self.api_dict_clean)
+        time_sync(self.api, data)
+        heartbeat(self.api, data)
+        balances(self.api, data)
+        profile(self.api, data)
+        balance_changed(self.api, data)
+        candles(self.api, data)
+        buy_complete(self.api, data)
+        option(self.api, data)
+        position_history(self.api, data)
+        list_info_data(self.api, data)
+        candle_generated_realtime(self.api, data, self.dict_queue_add)
+        candle_generated_v2(self.api, data, self.dict_queue_add)
+        commission_changed(self.api, data)
+        socket_option_opened(self.api, data)
+        api_option_init_all_result(self.api, data)
+        initialization_data(self.api, data)
+        underlying_list(self.api, data)
+        instruments(self.api, data)
+        financial_information(self.api, data)
+        position_changed(self.api, data)
+        option_opened(self.api, data)
+        option_closed(self.api, data)
+        top_assets_updated(self.api, data)
+        strike_list(self.api, data)
+        api_game_betinfo_result(self.api, data)
+        traders_mood_changed(self.api, data)
+        order_placed_temp(self.api, data)
+        order(self.api, data)
+        position(self.api, data)
+        positions(self.api, data)
+        deferred_orders(self.api, data)
+        history_positions(self.api, data)
+        available_leverages(self.api, data)
+        order_canceled(self.api, data)
+        position_closed(self.api, data)
+        overnight_fee(self.api, data)
+        api_game_getoptions_result(self.api, data)
+        sold_options(self.api, data)
+        tpsl_changed(self.api, data)
+        auto_margin_call_changed(self.api, data)
+        digital_option_placed(self.api, data, self.api_dict_clean)
+        result(self.api, data)
+        instrument_quotes_generated(self.api, data)
+        training_balance_reset(self.api, data)
+        socket_option_closed(self.api, data)
+        live_deal_binary_option_placed(self.api, data)
+        live_deal_digital_option(self.api, data)
+        leaderboard_deals_client(self.api, data)
+        live_deal(self.api, data)
+        user_profile_client(self.api, data)
+        leaderboard_userinfo_deals_client(self.api, data)
+        users_availability(self.api, data)
+        client_price_generated(self.api, data)
 
         global_value.ssl_Mutual_exclusion = False
 
     @staticmethod
-    def on_error(wss, error):  # pylint: disable=unused-argument
-        """Method to process websocket errors."""
-        logger = logging.getLogger(__name__)
-        logger.error(error)
+    def on_error(ws, error):
+        """Handle WebSocket errors."""
+        logging.getLogger(__name__).error(f"WebSocket error: {error}")
         global_value.websocket_error_reason = str(error)
         global_value.check_websocket_if_error = True
 
     @staticmethod
-    def on_open(wss):  # pylint: disable=unused-argument
-        """Method to process websocket open."""
-        logger = logging.getLogger(__name__)
-        logger.debug("Websocket client connected.")
+    def on_open(ws):
+        """Handle WebSocket open event."""
+        logging.getLogger(__name__).info("WebSocket connection opened.")
         global_value.check_websocket_if_connect = 1
 
     @staticmethod
-    def on_close(wss):  # pylint: disable=unused-argument
-        """Method to process websocket close."""
-        logger = logging.getLogger(__name__)
-        logger.debug("Websocket connection closed.")
+    def on_close(ws, close_status_code, close_msg):
+        """Handle WebSocket close event."""
+        logging.getLogger(__name__).warning(f"WebSocket closed: {close_status_code} - {close_msg}")
         global_value.check_websocket_if_connect = 0
+
+    def run_forever(self):
+        """Run the WebSocket client in a background thread."""
+        sslopt = {
+            "check_hostname": True,
+            "cert_reqs": ssl.CERT_REQUIRED,
+            "ca_certs": certifi.where(),
+        }
+        thread = Thread(target=self.wss.run_forever, kwargs={"sslopt": sslopt})
+        thread.daemon = True
+        thread.start()
